@@ -6,7 +6,10 @@
 int main(void){
   ssh_bind bind;
   ssh_session session;
+  ssh_message message;
+  ssh_channel chan=0;
   int r;
+  
 
   bind = ssh_bind_new();
   session = ssh_new();
@@ -39,6 +42,29 @@ int main(void){
     exit(-1);
   }
 
+  do {
+    message = ssh_message_get(session);
+    if(message){
+      switch(ssh_message_type(message)){
+      case SSH_REQUEST_CHANNEL_OPEN:
+	printf("got here 2\n");
+	if(ssh_message_subtype(message) == SSH_CHANNEL_SESSION){
+	  chan = ssh_message_channel_request_open_reply_accept(message);
+	  break;
+	}
+      default:
+	printf("%d\n",ssh_message_type(message));
+	ssh_message_reply_default(message);
+      }
+      ssh_message_free(message);
+    }
+  } while(message && !chan);
+  if(!chan){
+    printf("Error opening channgel: %s\n",ssh_get_error(session));
+    ssh_finalize();
+    exit(-1);
+  }
+  
   ssh_disconnect(session);
   ssh_bind_free(bind);
   return 0;
