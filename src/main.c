@@ -19,6 +19,7 @@ int main(void){
   ssh_channel chan=0;
 
   char buf[2048];
+  char name[128];
   int auth = 0;
   int shell = 0;
   int r, i;
@@ -64,8 +65,9 @@ int main(void){
       case SSH_AUTH_METHOD_NONE:
         ssh_message_auth_reply_success(message,0);
 	auth = 1;
+	strcpy(name,ssh_message_auth_user(message));
 	printf("User %s connected\n",
-	       ssh_message_auth_user(message));
+	       name);
       default:
 	ssh_message_auth_set_methods(message,SSH_AUTH_METHOD_NONE);
 	ssh_message_reply_default(message);
@@ -128,6 +130,9 @@ int main(void){
   do{
     i=ssh_channel_read(chan,buf, 2048, 0);
     if(i>0) {
+      ssh_channel_write(chan, "[", 1);
+      ssh_channel_write(chan, name, strlen(name));
+      ssh_channel_write(chan, "] ", 2);
       ssh_channel_write(chan, buf, i);
       if (write(1,buf,i) < 0) {
 	printf("error writing to buffer\n");
