@@ -17,9 +17,11 @@ int main(void){
   ssh_session session;
   ssh_message message;
   ssh_channel chan=0;
+
+  char buf[2048];
   int auth = 0;
-  int r;
-  
+  int shell = 0;
+  int r, i;
 
   bind = ssh_bind_new();
   session = ssh_new();
@@ -51,6 +53,7 @@ int main(void){
     printf("error handling key exchange: %s\n", ssh_get_error(session));
     exit(-1);
   }
+
   do {
     message=ssh_message_get(session);
     if(!message)
@@ -61,7 +64,7 @@ int main(void){
       case SSH_AUTH_METHOD_NONE:
         ssh_message_auth_reply_success(message,0);
 	auth = 1;
-	printf("User %s authenticated\n",
+	printf("User %s connected\n",
 	       ssh_message_auth_user(message));
       default:
 	ssh_message_auth_set_methods(message,SSH_AUTH_METHOD_NONE);
@@ -74,6 +77,13 @@ int main(void){
     }
     ssh_message_free(message);
   } while (!auth);
+
+  if(!auth){
+    printf("auth error: %s\n",ssh_get_error(session));
+    ssh_disconnect(session);
+    return 1;
+  }
+  
   do {
     message = ssh_message_get(session);
     if(message){
@@ -89,13 +99,45 @@ int main(void){
       ssh_message_free(message);
     }
   } while(message && !chan);
+  
   if(!chan){
     printf("Error opening channgel: %s\n",ssh_get_error(session));
     ssh_finalize();
     exit(-1);
   }
+
+  do {
+    message=ssh_message_get(session);
+    if(message && ssh_message_type(message)==SSH_REQUEST_CHANNEL &&
+       ssh_message_subtype(message)==SSH_CHANNEL_REQUEST_SHELL){
+      shell=1;
+      ssh_message_channel_request_reply_success(message);
+      break;
+    }
+    if(!shell){
+      ssh_message_reply_default(message);
+    }
+    ssh_message_free(message);
+  } while (message && !shell);
   
+  if(!shell){
+    printf("error : %s\n",ssh_get_error(session));
+    return 1;
+  }
+
+  do{
+    i=ssh_channel_read(chan,buf, 2048, 0);
+    if(i>0) {
+      ssh_channel_write(chan, buf, i);
+      if (write(1,buf,i) < 0) {
+	printf("error writing to buffer\n");
+	return 1;
+      }
+    }
+  } while (i>0);
+    
   ssh_disconnect(session);
   ssh_bind_free(bind);
+  ssh_finalize();
   return 0;
 }
